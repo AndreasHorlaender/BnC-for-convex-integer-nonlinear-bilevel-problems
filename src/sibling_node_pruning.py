@@ -24,12 +24,13 @@ def check_sibling_node(self):
             self.x_bin_var_list[i].lb = np.array(global_vars.parent_node_bounds)[0][idx:idx + self.number_of_x_binaries[i]]
             self.x_bin_var_list[i].ub = np.array(global_vars.parent_node_bounds)[1][idx:idx + self.number_of_x_binaries[i]]
         
-        for i in range(self.y_len):
-            idx = self.x_len + self.y_len + sum(self.number_of_x_binaries[k] for k in range(self.x_len)) + sum(self.number_of_y_binaries[k] for k in range(i))
-            
-            self.y_bin_var_list[i].lb = np.array(global_vars.parent_node_bounds)[0][idx:idx + self.number_of_y_binaries[i]]
-            self.y_bin_var_list[i].ub = np.array(global_vars.parent_node_bounds)[1][idx:idx + self.number_of_y_binaries[i]]
-            
+        if not global_vars.use_INGC_only_on_x:
+            for i in range(self.y_len):
+                idx = self.x_len + self.y_len + sum(self.number_of_x_binaries[k] for k in range(self.x_len)) + sum(self.number_of_y_binaries[k] for k in range(i))
+                
+                self.y_bin_var_list[i].lb = np.array(global_vars.parent_node_bounds)[0][idx:idx + self.number_of_y_binaries[i]]
+                self.y_bin_var_list[i].ub = np.array(global_vars.parent_node_bounds)[1][idx:idx + self.number_of_y_binaries[i]]
+                
         self.snp.update()    
         
         constraints_to_remove = [constr for constr in self.snp.getConstrs() if constr.ConstrName.startswith("Cut")]
@@ -37,66 +38,73 @@ def check_sibling_node(self):
             self.snp.remove(constr)
             
         self.snp.update()  
-            
+         
         add_relevant_user_cuts_snp(self)    
         
         self.snp.update()
-        
-        
+       
         ##### discard previous solution ifo
         self.snp.reset(1)
         self.snp.update()
 
         
     def solve_snp(self):  
+        y_Q_obj_y = gp.QuadExpr()
+        for i in range(self.y_len):
+            for j in range(self.y_len):
+                if self.Q_obj[i, j] != 0:  # Only add non-zero terms for efficiency
+                    y_Q_obj_y.addTerms(self.Q_obj[i, j], self.y_snp.tolist()[i], self.y_snp.tolist()[j])
         # solve subproblems
-        
+        #!!!!!!!!!!!
         for i in range(self.b_len + 1):
             self.snp.Params.TimeLimit = max(0, global_vars.end_time - time.time())
             if time.time() < global_vars.end_time:
                 if global_vars.first_cnstr_quad:
                     if i == 0:
                         self.new_cnstr_snp = self.snp.addQConstr(0.5 * (self.y_j + self.Delta_y_opt) @ self.Q_obj @ (self.y_j + self.Delta_y_opt) -
-                                                               0.5 * (self.y_snp @ self.Q_obj @ self.y_snp) + 
+                                                               0.5 * y_Q_obj_y + 
                                                                gp.quicksum([self.d_y[i] * self.y_j[i] for i in range(self.y_len)]) + 
                                                                gp.quicksum([self.d_y[i] * self.Delta_y_opt[i] for i in range(self.y_len)]) -
-                                                               LinExpr([self.d_y[i] for i in range(self.y_len)], [self.y_snp[i] for i in range(self.y_len)])>= 0)
+                                                               LinExpr([self.d_y[i] for i in range(self.y_len)], [self.y_snp.tolist()[i] for i in range(self.y_len)])>= 0)
                     elif i == 1:
+                        # first cnstr is quad cnstr
                         if global_vars.quad_ll_cnstr:
                             self.new_cnstr_snp = self.snp.addConstr(0.5 * (self.y_j + self.Delta_y_opt) @ self.Q_cnstr @ (self.y_j + self.Delta_y_opt) +
-                                                                  LinExpr([self.C[0][i] for i in range(self.x_len)], [self.x_snp[i] for i in range(self.x_len)]) + 
-                                                                  gp.quicksum([self.D[0][i] * (self.y_j[i] + self.Delta_y_opt[i]) for i in range(self.y_len)]) - 
+                                                                  LinExpr([self.C[0][j] for j in range(self.x_len)], [self.x_snp.tolist()[j] for j in range(self.x_len)]) + 
+                                                                  gp.quicksum([self.D[0][j] * (self.y_j[j] + self.Delta_y_opt[j]) for j in range(self.y_len)]) - 
                                                                   self.b[0]  >= 0)
                         else:
-                            self.new_cnstr_snp = self.snp.addConstr(LinExpr([self.C[0][i] for i in range(self.x_len)], [self.x_snp[i] for i in range(self.x_len)]) + 
-                                                                    gp.quicksum([self.D[0][i] * (self.y_j[i] + self.Delta_y_opt[i]) for i in range(self.y_len)]) - 
-                                                                    self.b[0]  >= 0)
+                            self.new_cnstr_snp = self.snp.addConstr(LinExpr([self.C[0][j] for j in range(self.x_len)], [self.x_snp.tolist()[j] for j in range(self.x_len)]) + 
+                                                                  gp.quicksum([self.D[0][j] * (self.y_j[j] + self.Delta_y_opt[j]) for j in range(self.y_len)]) - 
+                                                                  self.b[0]  >= 0)
                     else:
-                        self.new_cnstr_snp = self.snp.addConstr(LinExpr([self.C[i-1][j] for j in range(self.x_len)], [self.x_snp[j] for j in range(self.x_len)]) +
+                        self.new_cnstr_snp = self.snp.addConstr(LinExpr([self.C[i-1][j] for j in range(self.x_len)], [self.x_snp.tolist()[j] for j in range(self.x_len)]) +
                                                               gp.quicksum(self.D[i-1][j] * (self.y_j[j] + self.Delta_y_opt[j]) for j in range(self.y_len)) - 
                                                               self.b[i-1] >= 0)
-                        
+                            
                 else:
                     if i == 0:
                         self.new_cnstr_snp = self.snp.addQConstr(0.5 * (self.y_j + self.Delta_y_opt) @ self.Q_obj @ (self.y_j + self.Delta_y_opt) -
-                                                               0.5 * (self.y_snp @ self.Q_obj @ self.y_snp) + 
+                                                               0.5 * y_Q_obj_y + 
                                                                gp.quicksum([self.d_y[i] * self.y_j[i] for i in range(self.y_len)]) + 
                                                                gp.quicksum([self.d_y[i] * self.Delta_y_opt[i] for i in range(self.y_len)]) -
-                                                               LinExpr([self.d_y[i] for i in range(self.y_len)], [self.y_snp[i] for i in range(self.y_len)])>= 0)
+                                                               LinExpr([self.d_y[i] for i in range(self.y_len)], [self.y_snp.tolist()[i] for i in range(self.y_len)])>= 0)
                     elif i == self.b_len:
+                        # last cnstr is quad cnstr
                         self.new_cnstr_snp = self.snp.addConstr(0.5 * (self.y_j + self.Delta_y_opt) @ self.Q_cnstr @ (self.y_j + self.Delta_y_opt) +
-                                                              LinExpr([self.C[self.b_len-1][i] for i in range(self.x_len)], [self.x_snp[i] for i in range(self.x_len)]) + 
+                                                              LinExpr([self.C[self.b_len-1][i] for i in range(self.x_len)], [self.x_snp.tolist()[i] for i in range(self.x_len)]) + 
                                                               gp.quicksum([self.D[self.b_len-1][i] * (self.y_j[i] + self.Delta_y_opt[i]) for i in range(self.y_len)]) - 
                                                               self.b[self.b_len-1]  >= 0)
                     else:
-                        self.new_cnstr_snp = self.snp.addConstr(LinExpr([self.C[i-1][j] for j in range(self.x_len)], [self.x_snp[j] for j in range(self.x_len)]) +
+                        self.new_cnstr_snp = self.snp.addConstr(LinExpr([self.C[i-1][j] for j in range(self.x_len)], [self.x_snp.tolist()[j] for j in range(self.x_len)]) +
                                                               gp.quicksum(self.D[i-1][j] * (self.y_j[j] + self.Delta_y_opt[j]) for j in range(self.y_len)) - 
                                                               self.b[i-1] >= 0)
-                        
+                    
                 self.snp.update()
                 
                     
                 self.snp.optimize()
+                
                     
                     
                 if self.snp.status == GRB.INFEASIBLE or self.snp.status == GRB.INF_OR_UNBD:

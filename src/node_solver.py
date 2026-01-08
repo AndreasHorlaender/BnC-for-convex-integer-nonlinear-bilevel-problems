@@ -17,11 +17,11 @@ class Node_Solver:
         self.cb.read_info(self.packed_data)
         self.cb.build_models()
         
-        solution = self.m.solve(log_output=True)
+        solution = self.m.solve(log_output=False)
         
         number_of_DC, number_of_INGC, nodes_pruned, sibling_nodes_pruned = self.cb.return_info()
         number_of_nodes = self.m.solve_details.nb_nodes_processed
-
+        
         rel_mip_gap = self.m.solve_details.mip_relative_gap
         best_upper_bound = self.m.solve_details.best_bound
         
@@ -31,4 +31,5 @@ class Node_Solver:
             
             return round(self.m.objective_value, 2), rel_mip_gap, best_upper_bound, number_of_nodes, number_of_DC, number_of_INGC, nodes_pruned, sibling_nodes_pruned 
         else:
+            number_of_nodes = self.m.get_cplex().solution.progress.get_num_nodes_processed()
             return self.m.solve_details.status, rel_mip_gap, best_upper_bound, number_of_nodes, number_of_DC, number_of_INGC, nodes_pruned, sibling_nodes_pruned 

@@ -1,2 +1,0 @@
-name;objective value;method;smart_dc_verification;solve_cvp_globally;hyperplane_norm;time;mip_gap;nodes;DCs;INGCs;Nr_total_CVPs;Nodes_pruned;Neighbour_nodes_pruned
-miblp_20_15_50_0110_10_7;-260.0;INGC;True;False;2;73.8200352191925;0.0;1229;0;988;0;0;0

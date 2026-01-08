@@ -34,10 +34,11 @@ def check_plane(self, hyperplane_was_valid_for_subproblem, alpha, beta, tau, Z):
             self.x_bin_var_list[i].lb = np.array(self.x_bin_node_bounds)[i,:,0]
             self.x_bin_var_list[i].ub = np.array(self.x_bin_node_bounds)[i,:,1]
         
-        for i in range(self.y_len):
-            self.y_bin_var_list[i].lb = np.array(self.y_bin_node_bounds)[i,:,0]
-            self.y_bin_var_list[i].ub = np.array(self.y_bin_node_bounds)[i,:,1]
-            
+        if not global_vars.use_INGC_only_on_x:
+            for i in range(self.y_len):
+                self.y_bin_var_list[i].lb = np.array(self.y_bin_node_bounds)[i,:,0]
+                self.y_bin_var_list[i].ub = np.array(self.y_bin_node_bounds)[i,:,1]
+                
         self.cvp.update()    
         
         constraints_to_remove = [constr for constr in self.cvp.getConstrs() if constr.ConstrName.startswith("Cut")]
@@ -47,6 +48,24 @@ def check_plane(self, hyperplane_was_valid_for_subproblem, alpha, beta, tau, Z):
         self.cvp.update()     
         add_relevant_user_cuts(self)    
         self.cvp.update()
+        
+        
+        
+        ##### if we use the scoop problem and apply a DC on a node solution that is on the boundary of the bilevel-free set
+        
+        self.use_INGC_on_node_sol = False
+        
+        if not global_vars.use_max_t_scoop:
+            if not global_vars.use_scoop or (global_vars.use_scoop and global_vars.node_sol_on_boundary_of_bf_set):
+                self.use_INGC_on_node_sol = True
+                self.x_j_bin = [list(map(int, bin(abs(num))[2:].zfill(self.number_of_x_binaries[i]-1)))[::-1] + [1 if num < 0 else 0]
+                                for i, num in enumerate(self.x_j.astype(int))]
+                self.y_j_bin = [list(map(int, bin(abs(num))[2:].zfill(self.number_of_y_binaries[i]-1)))[::-1] + [1 if num < 0 else 0]
+                                for i, num in enumerate(self.y_j.astype(int))]
+                
+        ######################################################################################################################        
+                
+               
         
         self.cvp.setObjective(LinExpr([self.alpha_opt[i] for i in range(self.x_len)], [self.x_cvp.tolist()[i] for i in range(self.x_len)]) + 
                                 LinExpr([self.beta_opt[i] for i in range(self.y_len)], [self.y_cvp.tolist()[i] for i in range(self.y_len)]) - 
@@ -58,6 +77,10 @@ def check_plane(self, hyperplane_was_valid_for_subproblem, alpha, beta, tau, Z):
         ##### discard previous solution ifo
         self.cvp.reset(1)
         self.cvp.update()
+        
+        if self.use_INGC_on_node_sol:
+            self.LHS_INGC = gp.quicksum( (1 - self.x_bin_var_list[i][j]) if self.x_j_bin[i][j] == 1 else self.x_bin_var_list[i][j] for i in range(self.x_len) for j in range(self.number_of_x_binaries[i])) + gp.quicksum( (1 - self.y_bin_var_list[i][j]) if self.y_j_bin[i][j] == 1 else self.y_bin_var_list[i][j] for i in range(self.y_len) for j in range(self.number_of_y_binaries[i]))
+        
         
         
     def prepare_for_callback(self):
@@ -85,6 +108,8 @@ def check_plane(self, hyperplane_was_valid_for_subproblem, alpha, beta, tau, Z):
                 if self.subproblem_feasibility[i]:
                     # only solve feasible subproblems
                     if not self.hyperplane_was_valid_for_subproblem[i]: # is initially always false
+                        if self.use_INGC_on_node_sol and i in self.active_cnstrs_of_bf_set:
+                            self.INGC_on_node_sol = self.cvp.addConstr(self.LHS_INGC >= 1)
                         if global_vars.first_cnstr_quad:
                             if i == 0:
                                 self.new_cnstr = self.cvp.addQConstr(0.5 * (self.y_j + self.Delta_y_opt) @ self.Q_obj @ (self.y_j + self.Delta_y_opt) -
@@ -111,7 +136,7 @@ def check_plane(self, hyperplane_was_valid_for_subproblem, alpha, beta, tau, Z):
                         else:
                             if i == 0:
                                 self.new_cnstr = self.cvp.addQConstr(0.5 * (self.y_j + self.Delta_y_opt) @ self.Q_obj @ (self.y_j + self.Delta_y_opt) -
-                                                                       0.5 * (self.y_cvp @ self.Q_obj @ self.y_cvp) + 
+                                                                       0.5 * y_Q_obj_y + 
                                                                        gp.quicksum([self.d_y[i] * self.y_j[i] for i in range(self.y_len)]) + 
                                                                        gp.quicksum([self.d_y[i] * self.Delta_y_opt[i] for i in range(self.y_len)]) -
                                                                        LinExpr([self.d_y[i] for i in range(self.y_len)], [self.y_cvp.tolist()[i] for i in range(self.y_len)])>= 0)
@@ -173,8 +198,11 @@ def check_plane(self, hyperplane_was_valid_for_subproblem, alpha, beta, tau, Z):
                                 self.subproblem_feasibility[i] = False
                                 self.hyperplane_was_valid_for_subproblem[i] = True 
                                 self.latest_valid_subproblems.append(i)
-                                
+                        
+                        ### remove constraints that only appear in subproblem i        
                         self.cvp.remove(self.new_cnstr)
+                        if self.use_INGC_on_node_sol and i in self.active_cnstrs_of_bf_set:
+                            self.cvp.remove(self.INGC_on_node_sol)
                         self.cvp.update()
             
                 else:
@@ -206,6 +234,7 @@ def check_plane(self, hyperplane_was_valid_for_subproblem, alpha, beta, tau, Z):
     def check_sibling_node_feasibility(self):
         if all(self.subproblem_feasibility[i] == False for i in range(self.b_len+1)):
             self.every_subproblem_is_infeasible = True
+    
             global_vars.prune_sibling_node = check_sibling_node(self) 
             
     check_modify_start_time = time.time()        
@@ -214,11 +243,11 @@ def check_plane(self, hyperplane_was_valid_for_subproblem, alpha, beta, tau, Z):
     cvp_solve_start_time = time.time()
     solve_cvp(self)    
     global_vars.cvp_solve_time += time.time() - cvp_solve_start_time
-    
+
     if global_vars.use_sibling_node_pruning:
         if time.time() < global_vars.end_time:
             if global_vars.current_node_depth == global_vars.previous_node_depth +1:
                 # then we have an unexplored sibling node
                 check_sibling_node_feasibility(self) 
-    
+
     return(self.hyperplane_was_valid_for_subproblem, self.Z, self.every_subproblem_is_infeasible, self.latest_valid_subproblems)

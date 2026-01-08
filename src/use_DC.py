@@ -1,6 +1,8 @@
 import time
 from cut_generating_problem import generate_DC
 from cut_verifier import check_plane
+import global_vars
+from use_INGC import use_integer_no_good_cut
 
 def use_disjunctive_cut(self):
     Z = []
@@ -17,7 +19,8 @@ def use_disjunctive_cut(self):
         
         # check cut
         hyperplane_was_valid_for_subproblem, Z, every_subproblem_is_infeasible, latest_valid_subproblems = check_plane(self, hyperplane_was_valid_for_subproblem, alpha, beta, tau, Z)
-            
+        global_vars.number_of_iters_to_generate_DC += 1
+        
         if every_subproblem_is_infeasible:
             #we terminate the while loop
             hyperplane_final_check = True 
@@ -72,9 +75,17 @@ def use_disjunctive_cut(self):
         self.cuts.append([model_var_list,coeff_list, 'L', tau]) # to get a correct cut_list length
         self.nodes_pruned += 1
     else:    
-        #print("RHS", tau)
-        self.add_local(constraint=[model_var_list,coeff_list], sense='L', rhs=tau) 
-        self.number_of_DC += 1
-        self.cuts.append([model_var_list,coeff_list, 'L', tau])
+        if coeff_list[:self.x_len] @ self.x_j + coeff_list[self.x_len:] @ self.y_j - tau <= 1e-5:
+            print("USELESS CUT: ", coeff_list[:self.x_len] @ self.x_j + coeff_list[self.x_len:] @ self.y_j - tau)
+            global_vars.number_of_useless_cuts += 1
+            use_integer_no_good_cut(self)
+        else:    
+            self.add_local(constraint=[model_var_list,coeff_list], sense='L', rhs=tau) 
+            self.cuts.append([model_var_list,coeff_list, 'L', tau])
+            self.number_of_DC += 1
+            if global_vars.current_node_depth <= 100:
+                global_vars.DC_depth_list[global_vars.current_node_depth] += 1
+            else:
+                global_vars.DC_depth_list[101] += 1
         
-        
+       

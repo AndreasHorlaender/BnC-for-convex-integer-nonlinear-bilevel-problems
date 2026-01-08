@@ -1,5 +1,0 @@
-name;objective value;method;smart_dc_verification;solve_cvp_globally;hyperplane_norm;time;mip_gap;nodes;DCs;INGCs;Nr_total_CVPs;Nodes_pruned;Neighbour_nodes_pruned
-miblp_20_15_50_0110_10_7;-255.0;INGC+DC+NP;True;False;2;4.613477945327759;0.0;29;3;9;144;3;0
-miblp_20_15_50_0110_10_7;-255.0;INGC+DC+NP;False;False;2;4.8620994091033936;0.0;29;3;9;144;3;0
-miblp_20_15_50_0110_10_7;-255.0;INGC+DC+NP;False;False;2;4.700767755508423;0.0;29;3;9;144;3;0
-miblp_20_15_50_0110_10_7;-260.0;INGC+DC+NP;False;False;2;3.2817158699035645;0.0;25;2;11;77;1;1

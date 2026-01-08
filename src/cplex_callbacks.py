@@ -22,9 +22,8 @@ class update_incumbent_callback(HeuristicCallback):
         
     def __call__(self):
         if global_vars.found_new_bil_feas_point:
-            inc_obj_val = self.get_incumbent_objective_value()
-            
-            if inc_obj_val >= global_vars.bil_feas_UL_obj_val + 1e-5:
+            if global_vars.bil_feas_UL_obj_val <= global_vars.inc_obj_val - 1e-5:
+                global_vars.inc_obj_val = global_vars.bil_feas_UL_obj_val
                 self.set_solution([global_vars.var_names, global_vars.bil_feas_point])
                 
         global_vars.found_new_bil_feas_point = False # prevents the update from appearing in every single node       
@@ -71,7 +70,8 @@ class my_callback(LazyConstraintCallback):
         self.old_x_node_bounds = []
         self.old_y_node_bounds = []
         self.old_x_bin_node_bounds = []
-        self.old_y_bin_node_bounds = []
+        if not global_vars.use_INGC_only_on_x:
+            self.old_y_bin_node_bounds = []
         
         self.number_of_DC = 0
         self.number_of_INGC = 0

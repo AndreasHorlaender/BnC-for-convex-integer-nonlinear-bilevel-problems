@@ -1,4 +1,5 @@
 from gurobipy import LinExpr
+import global_vars
 
 ### Here we add the DCs and INGCs of the current subtree in the gurobi-model used for verifiying the new cut. The entry of self.cuts[i]
 ### is the i-th cut in the list and looks as follows.
@@ -23,29 +24,44 @@ def add_relevant_user_cuts(self):
         if self.cuts[i][2] == 'L':   ## then we have a DC
             self.cvp.addConstr(LinExpr([self.cuts[i][1][j] for j in range(self.x_len)], [self.x_cvp.tolist()[j] for j in range(self.x_len)]) + 
                                  LinExpr([self.cuts[i][1][self.x_len + j] for j in range(self.y_len)], [self.y_cvp.tolist()[j] for j in range(self.y_len)]) <= self.cuts[i][3], name='Cut'+str(i))
-        else:    
-            self.cvp.addConstr(LinExpr([self.cuts[i][1][j][k] for j in range(self.x_len) 
-                                          for k in range(self.number_of_x_binaries[j]) ],
-                                         [self.x_bin_var_list[j].tolist()[k] for j in range(self.x_len) 
-                                          for k in range(self.number_of_x_binaries[j])] ) 
-                                 + LinExpr([self.cuts[i][1][self.x_len + j][k] for j in range(self.y_len)
-                                            for k in range(self.number_of_y_binaries[j])],
-                                           [self.y_bin_var_list[j].tolist()[k] for j in range(self.y_len)
-                                            for k in range(self.number_of_y_binaries[j])] ) 
-                                 >= self.cuts[i][3], name='Cut'+str(i))
-            
+        else:    # we have an INGC
+            if global_vars.use_INGC_only_on_x:
+                self.cvp.addConstr(LinExpr([self.cuts[i][1][j][k] for j in range(self.x_len) 
+                                              for k in range(self.number_of_x_binaries[j]) ],
+                                             [self.x_bin_var_list[j].tolist()[k] for j in range(self.x_len) 
+                                              for k in range(self.number_of_x_binaries[j])] ) 
+                                              >= self.cuts[i][3], name='Cut'+str(i))
+            else:    
+                self.cvp.addConstr(LinExpr([self.cuts[i][1][j][k] for j in range(self.x_len) 
+                                              for k in range(self.number_of_x_binaries[j]) ],
+                                             [self.x_bin_var_list[j].tolist()[k] for j in range(self.x_len) 
+                                              for k in range(self.number_of_x_binaries[j])] ) 
+                                     + LinExpr([self.cuts[i][1][self.x_len + j][k] for j in range(self.y_len)
+                                                for k in range(self.number_of_y_binaries[j])],
+                                               [self.y_bin_var_list[j].tolist()[k] for j in range(self.y_len)
+                                                for k in range(self.number_of_y_binaries[j])] ) 
+                                     >= self.cuts[i][3], name='Cut'+str(i))
+                
 def add_relevant_user_cuts_snp(self):
     for i in range(len(self.cuts)):
         if self.cuts[i][2] == 'L':   ## then we have a DC
-            self.nnp.addConstr(LinExpr([self.cuts[i][1][j] for j in range(self.x_len)], [self.x_nnp[j] for j in range(self.x_len)]) + 
-                                 LinExpr([self.cuts[i][1][self.x_len + j] for j in range(self.y_len)], [self.y_nnp[j] for j in range(self.y_len)]) <= self.cuts[i][3], name='Cut'+str(i))
-        else:    
-            self.nnp.addConstr(LinExpr([self.cuts[i][1][j][k] for j in range(self.x_len) 
-                                          for k in range(self.number_of_x_binaries[j]) ],
-                                         [self.x_bin_var_list_nnp[j][k] for j in range(self.x_len) 
-                                          for k in range(self.number_of_x_binaries[j])] ) 
-                                 + LinExpr([self.cuts[i][1][self.x_len + j][k] for j in range(self.y_len)
-                                            for k in range(self.number_of_y_binaries[j])],
-                                           [self.y_bin_var_list_nnp[j][k] for j in range(self.y_len)
-                                            for k in range(self.number_of_y_binaries[j])] ) 
-                                 >= self.cuts[i][3], name='Cut'+str(i))            
+            self.snp.addConstr(LinExpr([self.cuts[i][1][j] for j in range(self.x_len)], [self.x_snp.tolist()[j] for j in range(self.x_len)]) + 
+                                 LinExpr([self.cuts[i][1][self.x_len + j] for j in range(self.y_len)], [self.y_snp.tolist()[j] for j in range(self.y_len)]) <= self.cuts[i][3], name='Cut'+str(i))
+        else:    # we have an INGC
+            if global_vars.use_INGC_only_on_x:
+                self.snp.addConstr(LinExpr([self.cuts[i][1][j][k] for j in range(self.x_len) 
+                                              for k in range(self.number_of_x_binaries[j]) ],
+                                             [self.x_bin_var_list[j].tolist()[k] for j in range(self.x_len) 
+                                              for k in range(self.number_of_x_binaries[j])] ) 
+                                              >= self.cuts[i][3], name='Cut'+str(i))
+            else:    
+                self.snp.addConstr(LinExpr([self.cuts[i][1][j][k] for j in range(self.x_len) 
+                                              for k in range(self.number_of_x_binaries[j]) ],
+                                             [self.x_bin_var_list_snp[j].tolist()[k] for j in range(self.x_len) 
+                                              for k in range(self.number_of_x_binaries[j])] ) 
+                                     + LinExpr([self.cuts[i][1][self.x_len + j][k] for j in range(self.y_len)
+                                                for k in range(self.number_of_y_binaries[j])],
+                                               [self.y_bin_var_list_snp[j].tolist()[k] for j in range(self.y_len)
+                                                for k in range(self.number_of_y_binaries[j])] ) 
+                                     >= self.cuts[i][3], name='Cut'+str(i))
+                

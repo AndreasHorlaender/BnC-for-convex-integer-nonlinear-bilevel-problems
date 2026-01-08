@@ -1,4 +1,5 @@
 import numpy as np
+import global_vars
 
 def get_node_info(self): 
     self.node_depth = self.get_current_node_depth()
@@ -27,10 +28,11 @@ def get_node_info(self):
         for j in range(self.number_of_x_binaries[i]):
             self.x_aux.append([self.get_lower_bounds("x_bin_" + str(i) + "_" + str(j)), self.get_upper_bounds("x_bin_" + str(i) + "_" + str(j))])
         self.x_bin_node_bounds.append(self.x_aux)
-           
-    self.y_bin_node_bounds = []
-    for i in range(self.y_len):
-        self.y_aux = [] 
-        for j in range(self.number_of_y_binaries[i]):
-            self.y_aux.append([self.get_lower_bounds("y_bin_" + str(i) + "_" + str(j)), self.get_upper_bounds("y_bin_" + str(i) + "_" + str(j))])
-        self.y_bin_node_bounds.append(self.y_aux)
+          
+    if not global_vars.use_INGC_only_on_x:    
+        self.y_bin_node_bounds = []
+        for i in range(self.y_len):
+            self.y_aux = [] 
+            for j in range(self.number_of_y_binaries[i]):
+                self.y_aux.append([self.get_lower_bounds("y_bin_" + str(i) + "_" + str(j)), self.get_upper_bounds("y_bin_" + str(i) + "_" + str(j))])
+            self.y_bin_node_bounds.append(self.y_aux)

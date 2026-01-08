@@ -181,18 +181,19 @@ class Data_Reader:
         for i in range(1, 1+self.y_len):
             self.Q_obj.append(list(map(int, lines[i].split())))
         self.Q_obj = np.array(self.Q_obj)
-            
-        for i in range(3 + self.y_len, 3 + self.y_len + self.y_len):
-            self.Q_cnstr.append(list(map(int, lines[i].split())))
-        self.Q_cnstr = np.array(self.Q_cnstr)
         
-        ########## modify RHS of quad constraint
         if global_vars.quad_ll_cnstr:
+            for i in range(3 + self.y_len, 3 + self.y_len + self.y_len):
+                self.Q_cnstr.append(list(map(int, lines[i].split())))
+            self.Q_cnstr = np.array(self.Q_cnstr)
+            
+            ########## modify RHS of quad constraint
+        
             # modify RHS of the quadratic constraint
             if global_vars.first_cnstr_quad:
-                self.b[0] += 0  #abs(self.b[0])
+                self.b[0] += abs(self.b[0])
             else:
-                self.b[self.b_len-1] += 0  #self.b[self.b_len-1]
+                self.b[self.b_len-1] += abs(self.b[self.b_len-1])
         else:
             self.Q_cnstr = np.zeros((self.y_len, self.y_len))
             global_vars.first_cnstr_quad = True # then we dont have to distinguish between the cases where this variables was set to True/False

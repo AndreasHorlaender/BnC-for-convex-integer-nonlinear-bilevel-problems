@@ -46,8 +46,6 @@ def set_LL_parameters(self):
     self.ll.parameters.threads = 1
     
 def add_LL_vars(self):
-    # x_j is fixed but we need to treat it as a variable to avoid constraints like 0 <= 0 which cplex does not
-    # recognize as constraint but only as bool and hence creates an error
     self.y_ll = self.ll.integer_var_list(keys = self.y_len, lb=np.array(self.y_bounds)[:,0], ub=np.array(self.y_bounds)[:,1], name = "y_ll")
     
     
@@ -84,12 +82,13 @@ def add_scoop_vars(self):
     # the aux_vars need to have the same boundaries as the y vars, otherwise the problem may be anbounded
     self.aux_var = self.scoop.integer_var_list(keys = self.y_len)
     
-    
-    self.t = self.scoop.continuous_var(lb=-cplex.infinity, name='t')
+    if not global_vars.use_1_norm_scoop:
+        self.t = self.scoop.continuous_var(lb=-cplex.infinity, name='t')
     self.s = self.scoop.continuous_var_list(keys = self.b_len+1, lb=0, name='s')
     
 def add_scoop_lin_constrs(self):  
-    self.scoop.add_constraints([self.t <= self.s[i] for i in range(self.b_len+1)])
+    if not global_vars.use_1_norm_scoop:
+        self.scoop.add_constraints([self.t <= self.s[i] for i in range(self.b_len+1)])
     if global_vars.first_cnstr_quad:
         self.scoop.add_constraints([self.scoop.scal_prod([self.Delta_y[j] for j in range(self.y_len)], [self.D[i][j] for j in range(self.y_len)]) + self.s[i+1] <= 0 for i in range(1, self.b_len)], ["scoop_lin_cnstr"+str(i) for i in range(1, self.b_len)])
     else:
@@ -98,7 +97,10 @@ def add_scoop_lin_constrs(self):
     self.scoop.add_constraints([self.aux_var[i] - self.Delta_y[i] == 0 for i in range(self.y_len)], ["aux"+str(i) for i in range(self.y_len)])
         
 def add_scoop_obj(self):   
-    self.scoop.set_objective('max', self.t)
+    if global_vars.use_1_norm_scoop:
+        self.scoop.set_objective('max', sum(self.s))
+    else:
+        self.scoop.set_objective('max', self.t)
     
 def build_scoop_problem(self):
     scoop_model_start_time = time.time()
@@ -122,12 +124,14 @@ def add_cvp_vars(self):
    
     # binary variables to represent x and y
     self.x_bin_var_list = []
-    self.y_bin_var_list = []
     for i in range(self.x_len):
         self.x_bin_var_list.append(self.cvp.addMVar(self.number_of_x_binaries[i], vtype=GRB.BINARY, name='x_bin_cvp_' + str(i)))
-    for i in range(self.y_len):    
-        self.y_bin_var_list.append(self.cvp.addMVar(self.number_of_y_binaries[i], vtype=GRB.BINARY, name='y_bin_cvp_' + str(i)))
     
+    if not global_vars.use_INGC_only_on_x:        
+        self.y_bin_var_list = []    
+        for i in range(self.y_len):    
+            self.y_bin_var_list.append(self.cvp.addMVar(self.number_of_y_binaries[i], vtype=GRB.BINARY, name='y_bin_cvp_' + str(i)))
+        
     self.cvp.update()
     
 def add_cvp_constrs(self):  
@@ -175,9 +179,10 @@ def add_cvp_constrs(self):
     self.cvp.addConstrs((self.x_cvp[i] == - 2**(self.number_of_x_binaries[i] -1) * self.x_bin_var_list[i][self.number_of_x_binaries[i]-1] 
                            + LinExpr([2**k for k in range(self.number_of_x_binaries[i] - 1)], [self.x_bin_var_list[i].tolist()[k] for k in range(self.number_of_x_binaries[i] - 1)]) for i in range(self.x_len)))
     
-    self.cvp.addConstrs((self.y_cvp[i] == - 2**(self.number_of_y_binaries[i] -1) * self.y_bin_var_list[i][self.number_of_y_binaries[i]-1] 
-                           + LinExpr([2**k for k in range(self.number_of_y_binaries[i] - 1)], [self.y_bin_var_list[i].tolist()[k] for k in range(self.number_of_y_binaries[i] - 1)]) for i in range(self.y_len)))
-    
+    if not global_vars.use_INGC_only_on_x:    
+        self.cvp.addConstrs((self.y_cvp[i] == - 2**(self.number_of_y_binaries[i] -1) * self.y_bin_var_list[i][self.number_of_y_binaries[i]-1] 
+                               + LinExpr([2**k for k in range(self.number_of_y_binaries[i] - 1)], [self.y_bin_var_list[i].tolist()[k] for k in range(self.number_of_y_binaries[i] - 1)]) for i in range(self.y_len)))
+        
     self.cvp.update()
     
 def build_CVP_model(self):
@@ -202,57 +207,67 @@ def add_snp_vars(self):
    
     # binary variables to represent x and y
     self.x_bin_var_list_snp = []
-    self.y_bin_var_list_snp = []
     for i in range(self.x_len):
         self.x_bin_var_list_snp.append(self.snp.addMVar(self.number_of_x_binaries[i], vtype=GRB.BINARY))
-    for i in range(self.y_len):    
-        self.y_bin_var_list_snp.append(self.snp.addMVar(self.number_of_y_binaries[i], vtype=GRB.BINARY))
-    
+        
+    if not global_vars.use_INGC_only_on_x:    
+        self.y_bin_var_list_snp = []
+        for i in range(self.y_len):    
+            self.y_bin_var_list_snp.append(self.snp.addMVar(self.number_of_y_binaries[i], vtype=GRB.BINARY))
+        
     self.snp.update()
     
 def add_snp_constrs(self):  
-    #this model is only used when enabling sibling node pruning
+    
+    quad_expr = gp.QuadExpr()
+    for i in range(self.y_len):
+        for j in range(self.y_len):
+            if self.Q_cnstr[i, j] != 0:  # Only add non-zero terms for efficiency
+                quad_expr.addTerms(self.Q_cnstr[i, j], self.y_snp.tolist()[i], self.y_snp.tolist()[j])
+    
     #### HPR constraints
-    self.snp.addConstrs((LinExpr([self.A[i][j] for j in range(self.x_len)], [self.x_snp[j] for j in range(self.x_len)]) + 
-                           LinExpr([self.B[i][j] for j in range(self.y_len)], [self.y_snp[j] for j in range(self.y_len)]) - 
+    self.snp.addConstrs((LinExpr([self.A[i][j] for j in range(self.x_len)], self.x_snp.tolist()) + 
+                           LinExpr([self.B[i][j] for j in range(self.y_len)], self.y_snp.tolist()) - 
                            self.a[i] <= 0 for i in range(self.a_len))) 
     
     if global_vars.first_cnstr_quad:
-        self.snp.addConstrs((LinExpr([self.C[i][j] for j in range(self.x_len)], [self.x_snp[j] for j in range(self.x_len)]) + 
-                               LinExpr([self.D[i][j] for j in range(self.y_len)], [self.y_snp[j] for j in range(self.y_len)]) - 
+        self.snp.addConstrs((LinExpr([self.C[i][j] for j in range(self.x_len)], self.x_snp.tolist()) + 
+                               LinExpr([self.D[i][j] for j in range(self.y_len)], self.y_snp.tolist()) - 
                                self.b[i] <= 0 for i in range(1, self.b_len)))
         
         if self.b_len >= 1:
             if global_vars.quad_ll_cnstr:
-                self.snp.addQConstr(0.5 * (self.y_snp @ self.Q_cnstr @ self.y_snp) +
-                                      LinExpr([self.C[0][j] for j in range(self.x_len)], [self.x_snp[j] for j in range(self.x_len)]) + 
-                                      LinExpr([self.D[0][j] for j in range(self.y_len)], [self.y_snp[j] for j in range(self.y_len)]) - 
+                self.snp.addQConstr(0.5 * quad_expr +
+                                      LinExpr([self.C[0][j] for j in range(self.x_len)], self.x_snp.tolist()) + 
+                                      LinExpr([self.D[0][j] for j in range(self.y_len)], self.y_snp.tolist()) - 
                                       self.b[0] <= 0) 
             else:
-                self.snp.addConstr(LinExpr([self.C[0][j] for j in range(self.x_len)], [self.x_snp[j] for j in range(self.x_len)]) + 
-                                   LinExpr([self.D[0][j] for j in range(self.y_len)], [self.y_snp[j] for j in range(self.y_len)]) - 
-                                   self.b[0] <= 0) 
+                self.snp.addConstr(LinExpr([self.C[0][j] for j in range(self.x_len)], self.x_snp.tolist()) + 
+                                     LinExpr([self.D[0][j] for j in range(self.y_len)], self.y_snp.tolist()) - 
+                                     self.b[0] <= 0) 
     else:
-        self.snp.addConstrs((LinExpr([self.C[i][j] for j in range(self.x_len)], [self.x_snp[j] for j in range(self.x_len)]) + 
-                           LinExpr([self.D[i][j] for j in range(self.y_len)], [self.y_snp[j] for j in range(self.y_len)]) - 
+        self.snp.addConstrs((LinExpr([self.C[i][j] for j in range(self.x_len)], self.x_snp.tolist()) + 
+                           LinExpr([self.D[i][j] for j in range(self.y_len)], self.y_snp.tolist()) - 
                            self.b[i] <= 0 for i in range(self.b_len-1)))
     
         if self.b_len >= 1:
-            self.snp.addQConstr(0.5 * (self.y_snp @ self.Q_cnstr @ self.y_snp) +
-                                  LinExpr([self.C[self.b_len-1][j] for j in range(self.x_len)], [self.x_snp[j] for j in range(self.x_len)]) + 
-                                  LinExpr([self.D[self.b_len-1][j] for j in range(self.y_len)], [self.y_snp[j] for j in range(self.y_len)]) - 
+            self.snp.addQConstr(0.5 * quad_expr+
+                                  LinExpr([self.C[self.b_len-1][j] for j in range(self.x_len)], self.x_snp.tolist()) + 
+                                  LinExpr([self.D[self.b_len-1][j] for j in range(self.y_len)], self.y_snp.tolist()) - 
                                   self.b[self.b_len-1] <= 0) 
-                    
+        
     self.snp.update()
     
-    #### binary constraints 
-    self.snp.addConstrs((self.x_snp[i] == - 2**(self.number_of_x_binaries[i] -1) * self.x_bin_var_list_snp[i][self.number_of_x_binaries[i]-1] 
-                           + LinExpr([2**k for k in range(self.number_of_x_binaries[i] - 1)], [self.x_bin_var_list_snp[i][k] for k in range(self.number_of_x_binaries[i] - 1)]) for i in range(self.x_len)))
+    #### binary expansion
+    self.snp.addConstrs((self.x_snp[i] == - 2**(self.number_of_x_binaries[i] -1) * self.x_bin_var_list[i][self.number_of_x_binaries[i]-1] 
+                           + LinExpr([2**k for k in range(self.number_of_x_binaries[i] - 1)], [self.x_bin_var_list[i].tolist()[k] for k in range(self.number_of_x_binaries[i] - 1)]) for i in range(self.x_len)))
     
-    self.snp.addConstrs((self.y_snp[i] == - 2**(self.number_of_y_binaries[i] -1) * self.y_bin_var_list_snp[i][self.number_of_y_binaries[i]-1] 
-                           + LinExpr([2**k for k in range(self.number_of_y_binaries[i] - 1)], [self.y_bin_var_list_snp[i][k] for k in range(self.number_of_y_binaries[i] - 1)]) for i in range(self.y_len)))
-    
+    if not global_vars.use_INGC_only_on_x:    
+        self.snp.addConstrs((self.y_snp[i] == - 2**(self.number_of_y_binaries[i] -1) * self.y_bin_var_list[i][self.number_of_y_binaries[i]-1] 
+                               + LinExpr([2**k for k in range(self.number_of_y_binaries[i] - 1)], [self.y_bin_var_list[i].tolist()[k] for k in range(self.number_of_y_binaries[i] - 1)]) for i in range(self.y_len)))
+        
     self.snp.update()
+   
 
 def add_snp_obj(self):
     # obj is zero because we only check feasibility

@@ -65,6 +65,8 @@ def solve_scoop(self):
         self.abort()
     #print("solve scoop")
     self.use_no_good_cut = False
+    global_vars.node_sol_on_boundary_of_bf_set = False
+    
     scoop_modify_start_time = time.time()
     modify_scoop_constrs(self)
     global_vars.scoop_modify_time += time.time() - scoop_modify_start_time
@@ -73,23 +75,24 @@ def solve_scoop(self):
     self.scoop.solve(clean_before_solve=True)
     global_vars.scoop_solve_time += time.time() - scoop_solve_start_time
     
+    
+    self.active_cnstrs_of_bf_set = []
+    
     if self.scoop.solve_details.status == 'integer optimal solution' or self.scoop.solve_details.status == 'integer optimal, tolerance':
-        ##print("is solved")
-        #print("S0LV3D")
         #print(self.scoop.solve_details.status)
         self.Delta_y_opt = np.zeros(self.y_len)
         for i in range(self.y_len):
             self.Delta_y_opt[i] = np.round(self.Delta_y[i].solution_value)
             
-        #self.scoop.export_as_lp("../src_HPC/SCOOOOOP.lp")    
-        #print("Delta_y = ", self.Delta_y_opt)
-        #error
-        if self.t.solution_value <= 1e-4:
-            #print('t is zero, the algorithm may cycle if we apply a disjunctive cut.')
+        # get the constraints of the bf-set that are satisfied with equality
+        self.active_cnstrs_of_bf_set = [i for i, var in enumerate(self.s) if var.solution_value <= 1e-4]
+        if self.active_cnstrs_of_bf_set:
             self.use_no_good_cut = True
+            global_vars.node_sol_on_boundary_of_bf_set = True
+        
+       
     else:    
-        #print("LLLLLLLLLLLLLLLL")
-        # if cplex thinks model is infeas although Delta_y = 0 is always feasible
+        # feasible with unscaled feasibilities
         self.Delta_y_opt = np.zeros(self.y_len)
         self.use_no_good_cut = True
         
@@ -99,4 +102,4 @@ def solve_scoop(self):
     
     
     
-    return(self.Delta_y_opt, self.use_no_good_cut)
+    return(self.Delta_y_opt, self.use_no_good_cut, self.active_cnstrs_of_bf_set)

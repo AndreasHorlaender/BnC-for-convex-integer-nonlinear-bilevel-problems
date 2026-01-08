@@ -1,3 +1,0 @@
-name;objective value;method;time;nodes;DCs;INGCs;Nodes_pruned;Neighbour_nodes_pruned
-miblp_20_20_50_0110_5_5;-392.0;INGC+DC+NP;14.271244049072266;132;7;1;8;1
-moore90;-22.0;INGC+DC+NP;0.33052492141723633;9;2;1;1;0

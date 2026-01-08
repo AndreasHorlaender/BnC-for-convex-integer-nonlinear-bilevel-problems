@@ -6,65 +6,57 @@ from node_builder import Node_Builder
 from node_solver import Node_Solver
 from result_analyzer import Result_Analyzer
 import global_vars
+import parameter_settings
 
 
-result_file = "Test"
-
-
-
-instance_name = "miblp_20_15_50_0110_10_1"
-
-global_vars.use_only_INGCs = True
-global_vars.solve_max_ul_problems = False  
-global_vars.quad_ll_cnstr = True
-use_mkp_with_50_percent_ll_cnstrs = False   
-
-global_vars.first_cnstr_quad = True
-
-#TODO:
-    # lb objective value
-    # how many CVPs solved to global opt?
-    
-   
-
-'''
+result_file = parameter_settings.result_filename
 
 ########### check cmd input
-instance_name = sys.argv[1] 
+instance_name = sys.argv[1]
 
-if sys.argv[2] == "True":
-    global_vars.use_only_INGCs = True
-else:   
-    global_vars.use_only_INGCs = False
+global_vars.use_only_INGCs = parameter_settings.use_only_INGCs
+
+# scoop
+global_vars.use_scoop = parameter_settings.use_scoop
+global_vars.use_max_t_scoop = parameter_settings.use_max_t_scoop
+global_vars.use_1_norm_scoop = parameter_settings.use_1_norm_scoop
+
+# further algorithmic techniques
+global_vars.use_sibling_node_pruning = parameter_settings.use_sibling_node_pruning
+global_vars.use_refinement_procedure = parameter_settings.use_refinement_procedure
+use_smart_dc_verification = parameter_settings.use_smart_dc_verification
+solve_subproblems_to_global_optimality = parameter_settings.solve_subproblems_to_global_optimality
+
+# instances
+global_vars.quad_ll_cnstr = parameter_settings.quad_ll_cnstr
+global_vars.first_cnstr_quad = parameter_settings.first_cnstr_quad
+global_vars.solve_max_ul_problems = parameter_settings.solve_max_ul_problems
+use_qkp_with_50_percent_ll_cnstrs = parameter_settings.use_qkp_with_50_percent_ll_cnstrs
+
+
+
+
+global_vars.use_INGC_only_on_x = False        
+#######################################################
+# disable incompatible settings
+if global_vars.use_only_INGCs:
+    global_vars.use_max_t_scoop = False
+    global_vars.use_scoop = False
     
-if sys.argv[3] == "True":   
-    global_vars.solve_max_ul_problems = True
-else:   
-    global_vars.solve_max_ul_problems = False      
+if global_vars.use_max_t_scoop:
+    global_vars.use_scoop = True    
+    global_vars.use_1_norm_scoop = False
+
+if global_vars.use_INGC_only_on_x:
+    global_vars.use_refinement_procedure = True
     
-if sys.argv[4] == "True":   
-    global_vars.quad_ll_cnstr = True
-else:   
-    global_vars.quad_ll_cnstr = False      
-    
-if sys.argv[5] == "True":   
-    use_mkp_with_50_percent_ll_cnstrs = True
-else:   
-    use_mkp_with_50_percent_ll_cnstrs = False      
-    
-'''    
-    
-########### enhacement techniques turned off by default
-global_vars.use_sibling_node_pruning = False
-use_smart_dc_verification = False
-solve_subproblems_to_global_optimality = True
-global_vars.use_refinement_procedure = False 
+   
         
 ########### modify result_file name
-if use_mkp_with_50_percent_ll_cnstrs:
+if use_qkp_with_50_percent_ll_cnstrs:
     instance_name = instance_name + "_50_50"
     result_file = result_file + "_50_50"
-    ## the data is labelled as first constraint but it actually uses the last constraint
+    ## for this setting we have ot use the last constraint
     global_vars.first_cnstr_quad = False
     
 if global_vars.solve_max_ul_problems:
@@ -76,7 +68,7 @@ if global_vars.quad_ll_cnstr:
     result_file = result_file + "_quad"
 else:
     result_file = result_file + "_no_quad"    
-    global_vars.first_cnstr_quad = False
+    #global_vars.first_cnstr_quad = False
     
 # prepare data parsing
 data_directory_name = "../data/"
@@ -104,7 +96,7 @@ for file in list_of_files:
                     current_txt_file = current_file_name + "_first_cnstr.txt" # randomly generated matrices for quadratic program     
                 else:
                     current_txt_file = current_file_name + "_last_cnstr.txt"   
-                if use_mkp_with_50_percent_ll_cnstrs:
+                if use_qkp_with_50_percent_ll_cnstrs:
                     ### the textfile is named first_cnstr but is now used for last cnstr
                     current_txt_file = current_file_name[:len(current_file_name)-6] + "_first_cnstr.txt" 
                 
@@ -125,9 +117,11 @@ for file in list_of_files:
             global_vars.var_names = []    
             global_vars.bil_feas_point = []
             global_vars.bil_feas_UL_obj_val = float('inf')
+            global_vars.inc_obj_val = float('inf')
             global_vars.total_time_to_solve_CVPs = 0
             global_vars.idealized_time_to_solve_CVPs = 0
             global_vars.total_time_snp = 0
+            global_vars.number_of_useless_cuts = 0
             
             global_vars.node_info_time = 0
             global_vars.modify_cut_list_time = 0
@@ -144,14 +138,18 @@ for file in list_of_files:
             global_vars.cvp_modify_time = 0
             global_vars.cvp_solve_time = 0
             global_vars.cb_time = 0
+            global_vars.time_refinement = 0
+            global_vars.number_of_iters_to_generate_DC = 0
             
             global_vars.x_node_bounds_prune = None
             global_vars.y_node_bounds_prune = None
+            global_vars.node_sol_on_boundary_of_bf_set = None
             
             global_vars.nr_of_refinements = 0
             global_vars.list_of_bf_sets = []
             global_vars.score_of_bf_sets = []
             global_vars.nr_of_bf_sets_recycled = 0
+            global_vars.DC_depth_list = [0]*1002
             
             # create model
             #print("Building the node ...")

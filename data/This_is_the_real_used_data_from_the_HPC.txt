@@ -1,1 +1,0 @@
-The data in this folder is original from the HPC and was used in all of my tests.

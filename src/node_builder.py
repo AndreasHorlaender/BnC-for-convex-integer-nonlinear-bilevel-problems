@@ -13,6 +13,8 @@ class Node_Builder:
         
         self.m.parameters.parallel = 1
         self.m.parameters.threads = 1
+        
+        #self.m.parameters.mip.strategy.miqcpstrat = 2
        
         self.m.parameters.timelimit = 7200
         
@@ -58,12 +60,14 @@ class Node_Builder:
             
             # binary variables to represent x and y
             self.x_bin_var_list = []
-            self.y_bin_var_list = []
             for i in range(self.x_len):
                 self.x_bin_var_list.append(self.m.binary_var_list(keys = self.number_of_x_binaries[i], name = "x_bin_" + str(i)))
-            for i in range(self.y_len):    
-                self.y_bin_var_list.append(self.m.binary_var_list(keys = self.number_of_y_binaries[i], name = "y_bin_" + str(i)))
             
+            if not global_vars.use_INGC_only_on_x:    
+                self.y_bin_var_list = []    
+                for i in range(self.y_len):    
+                    self.y_bin_var_list.append(self.m.binary_var_list(keys = self.number_of_y_binaries[i], name = "y_bin_" + str(i)))
+                
             ### modify the branching order of the variables cpx.order.set(var_name, priority, up/down/default)
             cpx = self.m.get_cplex()
             name_list = []
@@ -120,10 +124,12 @@ class Node_Builder:
             self.m.add_constraints((self.x[i] == - 2**(self.number_of_x_binaries[i] -1) * self.x_bin_var_list[i][self.number_of_x_binaries[i]-1]
                                                + self.m.scal_prod([self.x_bin_var_list[i][k] for k in range(self.number_of_x_binaries[i] - 1)], 
                                                [2**k for k in range(self.number_of_x_binaries[i] - 1)]) for i in range(self.x_len)))
-            self.m.add_constraints((self.y[i] == - 2**(self.number_of_y_binaries[i] -1) * self.y_bin_var_list[i][self.number_of_y_binaries[i]-1]
-                                               + self.m.scal_prod([self.y_bin_var_list[i][k] for k in range(self.number_of_y_binaries[i] - 1)], 
-                                               [2**k for k in range(self.number_of_y_binaries[i] - 1)]) for i in range(self.y_len)))    
-                
+            
+            if not global_vars.use_INGC_only_on_x:    
+                self.m.add_constraints((self.y[i] == - 2**(self.number_of_y_binaries[i] -1) * self.y_bin_var_list[i][self.number_of_y_binaries[i]-1]
+                                                   + self.m.scal_prod([self.y_bin_var_list[i][k] for k in range(self.number_of_y_binaries[i] - 1)], 
+                                                   [2**k for k in range(self.number_of_y_binaries[i] - 1)]) for i in range(self.y_len)))    
+                    
         def add_node_obj(self):
             self.m.set_objective('min', self.m.scal_prod([self.x[i] for i in range(self.x_len)], [self.c_x[i] for i in range(self.x_len)]) + 
                                  self.m.scal_prod([self.y[i] for i in range(self.y_len)], [self.c_y[i] for i in range(self.y_len)])) 

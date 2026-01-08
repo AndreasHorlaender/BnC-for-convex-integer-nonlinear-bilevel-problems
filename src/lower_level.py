@@ -56,7 +56,9 @@ def store_bilevel_feasible_point(self):
     
     # in any case we can use refinement procedure to improve y
     if global_vars.use_refinement_procedure:
+        start_time_ref = time.time()
         refinement_has_solution, self.y_bf = refinement_procedure(self)
+        global_vars.time_refinement += time.time() - start_time_ref
         if refinement_has_solution:
             found_bilevel_feas_point = True
             
@@ -66,7 +68,6 @@ def store_bilevel_feasible_point(self):
         bil_feas_point = []
         
         # get x_j and y_bf var_names and values
-        ## !!!!!!! maybe need to store the names only 1 time somewhere else - if always the same number of binaries used
         for i in range(self.x_len):
             var_names.append("x_" + str(i))
             bil_feas_point.append(int(self.x_bf[i]))
@@ -94,25 +95,26 @@ def store_bilevel_feasible_point(self):
             for j in range(self.number_of_x_binaries[i]):
                 var_names.append("x_bin_" + str(i) + "_" + str(j))
                 bil_feas_point.append(aux_list_x_bin[j])
-                
-        for i in range(self.y_len):
-            # get binary extension of y[i]
-            aux_list_y_bin = [0]*self.number_of_y_binaries[i]
-            if self.y_bf[i] <= -1e-3: # if the number is negative, then the last binary takes the value of 1
-                aux_list_y_bin[-1] = 1
-            k = 1
-            while not bin(int(self.y_bf[i]))[-k] == 'b': # binary extension is something like 0b110 = 6 and reads from right to left
-                if bin(int(self.y_bf[i]))[-k] == '1':
-                    aux_list_y_bin[k-1] = 1
-                elif bin(int(self.y_bf[i]))[-k] == '0':
-                    aux_list_y_bin[k-1] = 0
-                else:
-                    raise Exception("Binary extension went wrong!") 
-                k += 1  
-                
-            for j in range(self.number_of_y_binaries[i]):
-                var_names.append("y_bin_" + str(i) + "_" + str(j))      
-                bil_feas_point.append(aux_list_y_bin[j])
+        
+        if not global_vars.use_INGC_only_on_x:        
+            for i in range(self.y_len):
+                # get binary extension of y[i]
+                aux_list_y_bin = [0]*self.number_of_y_binaries[i]
+                if self.y_bf[i] <= -1e-3: # if the number is negative, then the last binary takes the value of 1
+                    aux_list_y_bin[-1] = 1
+                k = 1
+                while not bin(int(self.y_bf[i]))[-k] == 'b': # binary extension is something like 0b110 = 6 and reads from right to left
+                    if bin(int(self.y_bf[i]))[-k] == '1':
+                        aux_list_y_bin[k-1] = 1
+                    elif bin(int(self.y_bf[i]))[-k] == '0':
+                        aux_list_y_bin[k-1] = 0
+                    else:
+                        raise Exception("Binary extension went wrong!") 
+                    k += 1  
+                    
+                for j in range(self.number_of_y_binaries[i]):
+                    var_names.append("y_bin_" + str(i) + "_" + str(j))      
+                    bil_feas_point.append(aux_list_y_bin[j])
     
         ##print("BILEVEL_FEASIBLE_POINT = ", var_names, bil_feas_point)
         # get UL objective of the bilevel-feasible point
@@ -140,7 +142,14 @@ def solve_LL(self):
     #print("LL_solved")
     global_vars.ll_solve_time += time.time() - ll_solve_start_time
     #self.ll.export_as_lp("/home/horlaender/Schreibtisch/CPLEX_model/src_HPC/ll.lp")
-    ##print(self.ll.solve_details.status)
+    #print(self.ll.solve_details.status)
+    
+    if self.ll.solve_details.status == "integer optimal with unscaled infeasibilities":
+        #print(self.ll.solve_details.status)
+        self.ll.parameters.read.scale = 1
+        self.ll.solve(clean_before_solve=True) 
+        #print(self.ll.solve_details.status)
+        self.ll.parameters.read.scale = 0
     
     self.ll_obj_value = self.ll.objective_value
     
